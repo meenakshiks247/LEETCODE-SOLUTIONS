@@ -29,27 +29,13 @@ class Solution:
 
 Let’s understand the **core logic** behind how and why this solution works — not just the steps, but **why each step is necessary**.
 
----
-
 ### 🔹 Problem Recap
-
 Given: an array of integers `nums`.
-
 Task: find **all unique triplets** `(a, b, c)` such that:
-
-```
 a + b + c == 0
-```
-
----
-
 ### 🔸 Key Idea
-
 We need three numbers that add up to zero.
-
 Mathematically:
-
-```
 a + b + c = 0 → c = -(a + b)
 ```
 
@@ -58,20 +44,14 @@ So, for any two numbers `a` and `b`, we want to know:
 
 But doing this naively is **too slow** (brute force is O(n³)).
 
----
-
 ### 🔸 Why Sort the Array?
 
 ```python
 nums.sort()
-```
-
 Sorting helps us:
 
 1. Use the **two-pointer technique** efficiently.
 2. **Avoid duplicate triplets** easily, because duplicates are now adjacent.
-
----
 
 ### 🔸 Fix One Element, Search for Two Others
 
@@ -127,8 +107,5 @@ After finding a valid triplet, we skip duplicate `lo` and `hi` values to avoid r
 * **Avoid duplicates** by skipping repeated values
 * **Sorted array** is key to efficient search and duplicate handling
 
----
-
-Would you like to see this logic applied step-by-step on an example input like `[-1, 0, 1, 2, -1, -4]`?
 
 '''
