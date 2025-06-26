@@ -28,10 +28,5 @@ class Solution:
 
         return total == num
     
-# | `i` | `num % i == 0`?  | `num // i` | Action Taken                              | New Total        |
-| --- | ---------------- | ---------- | ----------------------------------------- | ---------------- |
-| 2   | Yes (36 % 2 = 0) | 18         | Add 2 and 18                              | 1 + 2 + 18 = 21  |
-| 3   | Yes              | 12         | Add 3 and 12                              | 21 + 3 + 12 = 36 |
-| 4   | Yes              | 9          | Add 4 and 9                               | 36 + 4 + 9 = 49  |
-| 5   | No               | —          | —                                         | (no change)      |
+  
 | 6   | Yes              | 6          | Add only 6 once (because `i == num // i`) | 49 + 6 = 55      |
