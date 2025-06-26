@@ -29,4 +29,3 @@ class Solution:
         return total == num
     
   
-| 6   | Yes              | 6          | Add only 6 once (because `i == num // i`) | 49 + 6 = 55      |
