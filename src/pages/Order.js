@@ -1,286 +1,342 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useOrder } from '../contexts/OrderContext';
+import { useOrders } from '../contexts/OrderContext';
 import { 
   Clock, 
   Users, 
-  AlertCircle, 
   CheckCircle, 
-  UtensilsCrossed,
-  Leaf,
-  Drumstick,
+  AlertCircle, 
+  Utensils, 
+  Leaf, 
+  Meat,
+  ShoppingCart,
+  Calendar,
+  CreditCard,
+  Info,
   Timer,
-  MapPin
+  ArrowRight
 } from 'lucide-react';
 
 const Order = () => {
-  const [selectedMeal, setSelectedMeal] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
   const { user } = useAuth();
   const { 
     createOrder, 
-    getUserOrder, 
+    myOrder, 
     isOrderingOpen, 
-    getAvailableSlots, 
-    getTodayStats,
-    MAX_ORDERS,
-    CUTOFF_TIME 
-  } = useOrder();
+    availableSlots, 
+    orderStats, 
+    loading 
+  } = useOrders();
+  
+  const [selectedMealType, setSelectedMealType] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
   const navigate = useNavigate();
 
-  const existingOrder = getUserOrder(user.id);
-  const stats = getTodayStats();
-  const availableSlots = getAvailableSlots();
-
+  // Check if user already has an order
   useEffect(() => {
-    if (existingOrder) {
+    if (myOrder) {
       navigate('/my-order');
     }
-  }, [existingOrder, navigate]);
+  }, [myOrder, navigate]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleOrderSubmit = async () => {
+    if (!selectedMealType) {
+      setError('Please select a meal type');
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
     setSuccess('');
 
-    if (!selectedMeal) {
-      setError('Please select a meal option');
+    try {
+      const result = await createOrder({ mealType: selectedMealType });
+      
+      if (result.success) {
+        setSuccess('Order placed successfully!');
+        setTimeout(() => {
+          navigate('/my-order');
+        }, 2000);
+      } else {
+        setError(result.error);
+      }
+    } catch (err) {
+      setError('Failed to place order. Please try again.');
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    const orderData = {
-      userId: user.id,
-      userName: user.name,
-      email: user.email,
-      collegeId: user.collegeId,
-      mealType: selectedMeal
-    };
-
-    const result = await createOrder(orderData);
-
-    if (result.success) {
-      setSuccess('Order placed successfully!');
-      setTimeout(() => {
-        navigate('/my-order');
-      }, 2000);
-    } else if (result.waitlisted) {
-      setSuccess(result.message);
-    } else {
-      setError(result.error || 'Failed to place order');
-    }
-
-    setIsSubmitting(false);
   };
 
   const mealOptions = [
     {
       id: 'veg',
-      title: 'Vegetarian Meal',
-      description: 'Dal, Rice, Roti, Vegetable, Pickle & Sweet',
+      name: 'Vegetarian Meal',
       icon: Leaf,
-      color: 'border-secondary-200 hover:border-secondary-300 hover:bg-secondary-50',
-      iconColor: 'text-secondary-600'
+      description: 'Fresh vegetarian meal with seasonal vegetables, dal, rice, roti, and salad',
+      color: 'text-green-600 bg-green-100',
+      borderColor: 'border-green-200 hover:border-green-300',
+      selectedColor: 'border-green-500 bg-green-50'
     },
     {
-      id: 'non-veg',
-      title: 'Non-Vegetarian Meal',
-      description: 'Chicken Curry, Rice, Roti, Dal, Pickle & Sweet',
-      icon: Drumstick,
-      color: 'border-danger-200 hover:border-danger-300 hover:bg-danger-50',
-      iconColor: 'text-danger-600'
+      id: 'nonveg',
+      name: 'Non-Vegetarian Meal',
+      icon: Meat,
+      description: 'Protein-rich non-veg meal with chicken/mutton curry, dal, rice, roti, and salad',
+      color: 'text-red-600 bg-red-100',
+      borderColor: 'border-red-200 hover:border-red-300',
+      selectedColor: 'border-red-500 bg-red-50'
     }
   ];
 
+  const currentTime = new Date();
+  const nextSlot = availableSlots.find(slot => slot.available);
+
   if (!isOrderingOpen()) {
     return (
-      <div className="container-custom py-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="card text-center">
-            <Timer className="h-16 w-16 text-warning-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Ordering Closed</h2>
-            <p className="text-gray-600 mb-4">
-              Pre-orders must be placed before {CUTOFF_TIME} AM. 
-              Please come back tomorrow between 6:00 AM and {CUTOFF_TIME} AM to place your order.
-            </p>
-            <div className="text-sm text-gray-500">
-              Current orders for today: {stats.totalOrders} / {MAX_ORDERS}
+      <div className="container-mobile max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Clock className="w-8 h-8 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Ordering is Closed</h1>
+          <p className="text-gray-600 mb-6">
+            Sorry! Meal ordering is only available until 10:00 AM daily.
+            Please come back tomorrow between 6:00 AM and 10:00 AM to place your order.
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h3 className="font-medium text-blue-900 mb-2">Ordering Schedule:</h3>
+            <div className="text-sm text-blue-800 space-y-1">
+              <div>• Orders open: 6:00 AM daily</div>
+              <div>• Orders close: 10:00 AM daily</div>
+              <div>• Meal pickup: 12:00 PM - 2:00 PM</div>
             </div>
           </div>
+          <button
+            onClick={() => navigate('/')}
+            className="btn-gradient text-white px-6 py-3 rounded-lg"
+          >
+            Back to Home
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container-custom py-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="container-mobile max-w-4xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Pre-Order Your Meal</h1>
-          <p className="text-gray-600">
-            Select your meal preference and confirm your order for today's lunch
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            Order Your Meal
+          </h1>
+          <p className="text-lg text-gray-600">
+            Select your preferred meal and secure your spot for today's lunch
           </p>
         </div>
 
-        {/* Status Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="card text-center">
-            <Clock className="h-8 w-8 text-primary-600 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900">{CUTOFF_TIME} AM</div>
-            <div className="text-sm text-gray-600">Order Cutoff</div>
+        {/* Status Banner */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+            <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-2" />
+            <div className="text-lg font-semibold text-green-900">Ordering Open</div>
+            <div className="text-sm text-green-700">Until 10:00 AM</div>
           </div>
-          <div className="card text-center">
-            <Users className="h-8 w-8 text-secondary-600 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900">{stats.spotsLeft}</div>
-            <div className="text-sm text-gray-600">Spots Remaining</div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <Users className="w-6 h-6 text-blue-600 mx-auto mb-2" />
+            <div className="text-lg font-semibold text-blue-900">{200 - orderStats.total} Left</div>
+            <div className="text-sm text-blue-700">Available slots</div>
           </div>
-          <div className="card text-center">
-            <MapPin className="h-8 w-8 text-warning-600 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900">₹40</div>
-            <div className="text-sm text-gray-600">Price per Meal</div>
+          
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+            <Calendar className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+            <div className="text-lg font-semibold text-purple-900">
+              {nextSlot ? nextSlot.time : 'No slots'}
+            </div>
+            <div className="text-sm text-purple-700">Next available slot</div>
           </div>
         </div>
 
-        {/* Alert if low spots */}
-        {stats.spotsLeft <= 20 && stats.spotsLeft > 0 && (
-          <div className="mb-6 p-4 bg-warning-50 border border-warning-200 rounded-lg">
-            <div className="flex items-center">
-              <AlertCircle className="h-5 w-5 text-warning-600 mr-2" />
-              <span className="text-warning-800 font-medium">
-                Only {stats.spotsLeft} spots left! Order now to secure your meal.
-              </span>
+        {/* Order Form */}
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          {/* Error/Success Messages */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3 mb-6">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <span className="text-sm text-red-700">{error}</span>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center space-x-3 mb-6">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+              <span className="text-sm text-green-700">{success}</span>
+            </div>
+          )}
+
+          {/* User Info */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <h3 className="font-medium text-gray-900 mb-2">Order Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-500">Student Name:</span>
+                <span className="ml-2 font-medium">{user.name}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">College ID:</span>
+                <span className="ml-2 font-medium">{user.collegeId}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Email:</span>
+                <span className="ml-2 font-medium">{user.email}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Order Date:</span>
+                <span className="ml-2 font-medium">{new Date().toLocaleDateString()}</span>
+              </div>
             </div>
           </div>
-        )}
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Order Form */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Select Your Meal</h2>
-
-            {error && (
-              <div className="mb-4 p-4 bg-danger-50 border border-danger-200 rounded-lg">
-                <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 text-danger-600 mr-2" />
-                  <span className="text-danger-800">{error}</span>
-                </div>
-              </div>
-            )}
-
-            {success && (
-              <div className="mb-4 p-4 bg-secondary-50 border border-secondary-200 rounded-lg">
-                <div className="flex items-center">
-                  <CheckCircle className="h-5 w-5 text-secondary-600 mr-2" />
-                  <span className="text-secondary-800">{success}</span>
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Meal Options */}
-              <div className="space-y-4">
-                {mealOptions.map((option) => {
-                  const Icon = option.icon;
-                  return (
-                    <label
-                      key={option.id}
-                      className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors duration-200 ${
-                        selectedMeal === option.id
-                          ? `${option.color} border-opacity-100`
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="meal"
-                        value={option.id}
-                        checked={selectedMeal === option.id}
-                        onChange={(e) => setSelectedMeal(e.target.value)}
-                        className="sr-only"
-                      />
-                      <Icon className={`h-8 w-8 mr-4 ${option.iconColor}`} />
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">{option.title}</div>
-                        <div className="text-sm text-gray-600">{option.description}</div>
+          {/* Meal Selection */}
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Select Your Meal</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {mealOptions.map((meal) => {
+                const Icon = meal.icon;
+                const isSelected = selectedMealType === meal.id;
+                
+                return (
+                  <button
+                    key={meal.id}
+                    onClick={() => {
+                      setSelectedMealType(meal.id);
+                      setError('');
+                    }}
+                    className={`relative border-2 rounded-xl p-6 text-left transition-all duration-200 ${
+                      isSelected 
+                        ? meal.selectedColor 
+                        : `border-gray-200 hover:border-gray-300 ${meal.borderColor}`
+                    }`}
+                  >
+                    {isSelected && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary-600 rounded-full flex items-center justify-center">
+                        <CheckCircle className="w-4 h-4 text-white" />
                       </div>
-                      <div className="text-lg font-bold text-gray-900">₹40</div>
-                    </label>
-                  );
-                })}
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting || !selectedMeal || stats.spotsLeft === 0}
-                className="w-full btn-primary"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="spinner" />
-                    Placing Order...
-                  </>
-                ) : stats.spotsLeft === 0 ? (
-                  'No Spots Available'
-                ) : (
-                  <>
-                    <UtensilsCrossed className="h-5 w-5" />
-                    Confirm Order
-                  </>
-                )}
-              </button>
-            </form>
+                    )}
+                    
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${meal.color}`}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2">{meal.name}</h4>
+                    <p className="text-gray-600 text-sm leading-relaxed">{meal.description}</p>
+                    
+                    <div className="mt-4 flex items-center justify-between">
+                      <span className="text-2xl font-bold text-gray-900">₹40</span>
+                      <span className="text-sm text-gray-500">Per meal</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Available Slots */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Available Time Slots</h2>
-            <div className="space-y-3">
-              {availableSlots.map((slot) => (
-                <div
-                  key={slot.id}
-                  className={`flex items-center justify-between p-3 border rounded-lg ${
-                    slot.available
-                      ? 'border-secondary-200 bg-secondary-50'
-                      : 'border-gray-200 bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <Clock className={`h-5 w-5 ${slot.available ? 'text-secondary-600' : 'text-gray-400'}`} />
-                    <span className={`font-medium ${slot.available ? 'text-gray-900' : 'text-gray-500'}`}>
-                      {slot.time}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`text-sm ${slot.available ? 'text-secondary-600' : 'text-gray-500'}`}>
-                      {25 - slot.count}/25 available
-                    </span>
-                    {slot.available ? (
-                      <span className="badge-success">Open</span>
-                    ) : (
-                      <span className="badge-danger">Full</span>
-                    )}
-                  </div>
-                </div>
-              ))}
+          {/* Slot Information */}
+          {nextSlot && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+              <div className="flex items-center space-x-3 mb-3">
+                <Timer className="w-5 h-5 text-blue-600" />
+                <h3 className="font-medium text-blue-900">Your Pickup Slot</h3>
+              </div>
+              <div className="text-blue-800">
+                <p className="mb-2">
+                  Your meal will be ready for pickup at: <strong>{nextSlot.time}</strong>
+                </p>
+                <p className="text-sm">
+                  Please arrive during your designated time slot with your QR code for quick service.
+                </p>
+              </div>
             </div>
+          )}
 
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="text-sm font-medium text-blue-800 mb-2">📋 How it works:</h3>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Select your meal and confirm order</li>
-                <li>• Get assigned to next available slot</li>
-                <li>• Receive QR code for pickup</li>
-                <li>• Pay ₹40 online before pickup</li>
-                <li>• Show QR during your time slot</li>
-              </ul>
+          {/* Payment Information */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <CreditCard className="w-5 h-5 text-yellow-600" />
+              <h3 className="font-medium text-yellow-900">Payment Information</h3>
             </div>
+            <div className="text-yellow-800 text-sm space-y-1">
+              <p>• Payment of ₹40 will be processed after order confirmation</p>
+              <p>• Multiple payment options available: UPI, Cards, Net Banking</p>
+              <p>• You can also pay at the canteen during pickup</p>
+            </div>
+          </div>
+
+          {/* Important Notes */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
+            <div className="flex items-center space-x-3 mb-3">
+              <Info className="w-5 h-5 text-gray-600" />
+              <h3 className="font-medium text-gray-900">Important Notes</h3>
+            </div>
+            <div className="text-gray-700 text-sm space-y-1">
+              <p>• Orders must be placed before 10:00 AM daily</p>
+              <p>• Maximum 200 orders per day (first come, first served)</p>
+              <p>• Pickup is available from 12:00 PM to 2:00 PM</p>
+              <p>• Please bring your QR code for order verification</p>
+              <p>• Cancellations are not allowed after order confirmation</p>
+            </div>
+          </div>
+
+          {/* Order Button */}
+          <button
+            onClick={handleOrderSubmit}
+            disabled={!selectedMealType || isSubmitting || loading}
+            className="w-full bg-primary-600 text-white py-4 px-6 rounded-lg font-semibold text-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+          >
+            {isSubmitting ? (
+              <>
+                <div className="spinner w-5 h-5"></div>
+                <span>Placing Order...</span>
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="w-5 h-5" />
+                <span>Place Order</span>
+                <ArrowRight className="w-5 h-5" />
+              </>
+            )}
+          </button>
+
+          {!selectedMealType && (
+            <p className="text-center text-gray-500 text-sm mt-3">
+              Please select a meal type to continue
+            </p>
+          )}
+        </div>
+
+        {/* Quick Stats */}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-lg p-4 text-center shadow">
+            <Utensils className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+            <div className="text-lg font-semibold text-gray-900">{orderStats.total}</div>
+            <div className="text-sm text-gray-600">Orders Today</div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-4 text-center shadow">
+            <Leaf className="w-6 h-6 text-green-600 mx-auto mb-2" />
+            <div className="text-lg font-semibold text-gray-900">{orderStats.veg}</div>
+            <div className="text-sm text-gray-600">Veg Orders</div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-4 text-center shadow">
+            <Meat className="w-6 h-6 text-red-600 mx-auto mb-2" />
+            <div className="text-lg font-semibold text-gray-900">{orderStats.nonVeg}</div>
+            <div className="text-sm text-gray-600">Non-Veg Orders</div>
           </div>
         </div>
       </div>

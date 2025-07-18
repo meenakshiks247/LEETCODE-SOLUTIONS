@@ -1,251 +1,324 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useOrder } from '../contexts/OrderContext';
+import { useOrders } from '../contexts/OrderContext';
 import { 
+  ShoppingCart, 
   Clock, 
-  Users, 
+  QrCode, 
   CreditCard, 
   BarChart3, 
-  QrCode,
-  CheckCircle,
+  Users, 
+  CheckCircle, 
   ArrowRight,
-  UtensilsCrossed,
-  Timer,
-  Bell
+  Utensils,
+  Calendar,
+  Smartphone
 } from 'lucide-react';
 
 const Home = () => {
-  const { isAuthenticated, user } = useAuth();
-  const { getTodayStats, isOrderingOpen, CUTOFF_TIME } = useOrder();
-  const stats = getTodayStats();
+  const { isAuthenticated, isAdmin, user } = useAuth();
+  const { orderStats, isOrderingOpen, myOrder } = useOrders();
 
   const features = [
     {
+      icon: Calendar,
+      title: 'Pre-Order System',
+      description: 'Order your meals before 10 AM and skip the queue',
+      color: 'text-blue-600 bg-blue-100'
+    },
+    {
       icon: Clock,
-      title: 'Pre-Order Meals',
-      description: 'Order your meals before 10:00 AM and skip the queue',
-      color: 'text-primary-600'
+      title: 'Time Slot Management',
+      description: 'Get assigned specific pickup times to avoid crowding',
+      color: 'text-green-600 bg-green-100'
     },
     {
       icon: QrCode,
-      title: 'Digital Queue',
-      description: 'Get your time slot and QR code for quick pickup',
-      color: 'text-secondary-600'
+      title: 'QR Code Verification',
+      description: 'Quick and contactless order verification system',
+      color: 'text-purple-600 bg-purple-100'
     },
     {
       icon: CreditCard,
       title: 'Digital Payments',
-      description: 'Pay online with UPI and track your payment status',
-      color: 'text-warning-600'
+      description: 'Secure online payments with multiple payment options',
+      color: 'text-orange-600 bg-orange-100'
     },
     {
       icon: BarChart3,
-      title: 'Smart Analytics',
-      description: 'Real-time demand tracking and optimized service',
-      color: 'text-danger-600'
+      title: 'Real-time Analytics',
+      description: 'Track demand patterns and optimize food preparation',
+      color: 'text-indigo-600 bg-indigo-100'
+    },
+    {
+      icon: Smartphone,
+      title: 'Mobile Friendly',
+      description: 'Responsive design that works perfectly on all devices',
+      color: 'text-pink-600 bg-pink-100'
     }
   ];
 
-  return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 text-white">
-        <div className="container-custom py-20">
-          <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">
-              Smart Canteen System
-            </h1>
-            <p className="text-xl md:text-2xl mb-8 text-primary-100">
-              Pre-order meals, skip queues, and enjoy seamless digital dining experience
-            </p>
-            
-            {/* Status Indicator */}
-            <div className="mb-8">
-              {isOrderingOpen() ? (
-                <div className="inline-flex items-center space-x-2 bg-secondary-600 text-white px-4 py-2 rounded-full">
-                  <CheckCircle className="h-5 w-5" />
-                  <span>Ordering Open until {CUTOFF_TIME} AM</span>
-                </div>
-              ) : (
-                <div className="inline-flex items-center space-x-2 bg-danger-600 text-white px-4 py-2 rounded-full">
-                  <Timer className="h-5 w-5" />
-                  <span>Ordering Closed - Opens tomorrow at 6:00 AM</span>
-                </div>
-              )}
-            </div>
+  const stats = [
+    { label: 'Daily Orders', value: orderStats.total, icon: Utensils },
+    { label: 'Available Slots', value: 200 - orderStats.total, icon: Clock },
+    { label: 'Happy Customers', value: '500+', icon: Users },
+    { label: 'Success Rate', value: '99%', icon: CheckCircle }
+  ];
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 overflow-hidden">
+        <div className="absolute inset-0 bg-black opacity-10"></div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+          <div className="text-center">
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
+              Smart Canteen
+              <span className="block text-2xl md:text-3xl font-normal text-primary-200 mt-2">
+                Digital Food Ordering System
+              </span>
+            </h1>
+            <p className="text-xl text-primary-100 mb-8 max-w-3xl mx-auto">
+              Pre-order your meals, skip the queue, and enjoy a seamless dining experience 
+              with our advanced canteen management system.
+            </p>
+
+            {/* Call to Action */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               {isAuthenticated ? (
-                <>
-                  <Link to="/order" className="btn-success text-lg px-8 py-4">
-                    <UtensilsCrossed className="h-5 w-5" />
-                    Order Now
-                  </Link>
-                  <Link to="/my-order" className="btn-secondary text-lg px-8 py-4">
-                    <QrCode className="h-5 w-5" />
-                    My Order
-                  </Link>
-                </>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {!isAdmin && (
+                    <>
+                      {myOrder ? (
+                        <Link
+                          to="/my-order"
+                          className="btn-gradient bg-white text-primary-700 hover:bg-gray-50 px-8 py-4 rounded-lg font-semibold flex items-center space-x-2 transform hover:scale-105 transition-all"
+                        >
+                          <QrCode className="w-5 h-5" />
+                          <span>View My Order</span>
+                        </Link>
+                      ) : (
+                        <Link
+                          to="/order"
+                          className="btn-gradient bg-white text-primary-700 hover:bg-gray-50 px-8 py-4 rounded-lg font-semibold flex items-center space-x-2 transform hover:scale-105 transition-all"
+                        >
+                          <ShoppingCart className="w-5 h-5" />
+                          <span>Order Now</span>
+                        </Link>
+                      )}
+                    </>
+                  )}
+                  {isAdmin && (
+                    <Link
+                      to="/admin/dashboard"
+                      className="btn-gradient bg-white text-primary-700 hover:bg-gray-50 px-8 py-4 rounded-lg font-semibold flex items-center space-x-2 transform hover:scale-105 transition-all"
+                    >
+                      <BarChart3 className="w-5 h-5" />
+                      <span>View Dashboard</span>
+                    </Link>
+                  )}
+                </div>
               ) : (
-                <Link to="/login" className="btn-success text-lg px-8 py-4">
-                  Get Started
-                  <ArrowRight className="h-5 w-5" />
+                <Link
+                  to="/login"
+                  className="btn-gradient bg-white text-primary-700 hover:bg-gray-50 px-8 py-4 rounded-lg font-semibold flex items-center space-x-2 transform hover:scale-105 transition-all"
+                >
+                  <span>Get Started</span>
+                  <ArrowRight className="w-5 h-5" />
                 </Link>
               )}
             </div>
+
+            {/* Status Banner */}
+            {isAuthenticated && !isAdmin && (
+              <div className="mt-8 inline-flex items-center space-x-4">
+                <div className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium ${
+                  isOrderingOpen() 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-red-500 text-white'
+                }`}>
+                  <Clock className="w-4 h-4" />
+                  <span>{isOrderingOpen() ? 'Ordering Open Until 10 AM' : 'Ordering Closed for Today'}</span>
+                </div>
+                {isOrderingOpen() && (
+                  <div className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-full text-sm font-medium">
+                    <Users className="w-4 h-4" />
+                    <span>{200 - orderStats.total} slots remaining</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Stats Section */}
+      {/* Welcome Message for Authenticated Users */}
       {isAuthenticated && (
-        <section className="py-12 bg-white">
-          <div className="container-custom">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-primary-600 mb-2">
-                  {stats.totalOrders}
-                </div>
-                <div className="text-gray-600">Orders Today</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-secondary-600 mb-2">
-                  {stats.spotsLeft}
-                </div>
-                <div className="text-gray-600">Spots Left</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-warning-600 mb-2">
-                  ₹{stats.revenue}
-                </div>
-                <div className="text-gray-600">Revenue</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-danger-600 mb-2">
-                  {stats.waitlistCount}
-                </div>
-                <div className="text-gray-600">Waitlisted</div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="bg-white rounded-2xl shadow-lg p-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Welcome back, {user.name}!
+              </h2>
+              <p className="text-gray-600 mb-6">
+                {isAdmin 
+                  ? 'Manage orders, payments, and analyze canteen performance from your dashboard.'
+                  : 'Ready to order your delicious meal for today?'
+                }
+              </p>
+              
+              {/* Quick Actions */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                {isAdmin ? (
+                  <>
+                    <Link
+                      to="/admin/dashboard"
+                      className="flex items-center space-x-2 bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                      <BarChart3 className="w-5 h-5" />
+                      <span>Dashboard</span>
+                    </Link>
+                    <Link
+                      to="/scan"
+                      className="flex items-center space-x-2 bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors"
+                    >
+                      <QrCode className="w-5 h-5" />
+                      <span>Scan Orders</span>
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    {!myOrder && isOrderingOpen() && (
+                      <Link
+                        to="/order"
+                        className="flex items-center space-x-2 bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors"
+                      >
+                        <ShoppingCart className="w-5 h-5" />
+                        <span>Place Order</span>
+                      </Link>
+                    )}
+                    {myOrder && (
+                      <Link
+                        to="/my-order"
+                        className="flex items-center space-x-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        <QrCode className="w-5 h-5" />
+                        <span>View Order & QR</span>
+                      </Link>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
-        </section>
+        </div>
       )}
 
-      {/* Features Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="container-custom">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Why Choose Smart Canteen?
-            </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Experience the future of college dining with our innovative features designed to save time and enhance your meal experience.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => {
-              const Icon = feature.icon;
-              return (
-                <div key={index} className="card text-center hover:shadow-lg transition-shadow duration-300">
-                  <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4 ${feature.color}`}>
-                    <Icon className="h-8 w-8" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-600">
-                    {feature.description}
-                  </p>
+      {/* Stats Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {stats.map((stat, index) => {
+            const Icon = stat.icon;
+            return (
+              <div key={index} className="bg-white rounded-xl shadow-lg p-6 text-center card-hover">
+                <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <Icon className="w-6 h-6 text-primary-600" />
                 </div>
-              );
-            })}
-          </div>
+                <div className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</div>
+                <div className="text-sm text-gray-600">{stat.label}</div>
+              </div>
+            );
+          })}
         </div>
-      </section>
+      </div>
+
+      {/* Features Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            Why Choose Smart Canteen?
+          </h2>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            Experience the future of food ordering with our innovative features designed 
+            to make your dining experience faster, easier, and more enjoyable.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {features.map((feature, index) => {
+            const Icon = feature.icon;
+            return (
+              <div key={index} className="bg-white rounded-xl shadow-lg p-8 card-hover">
+                <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-6 ${feature.color}`}>
+                  <Icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">{feature.title}</h3>
+                <p className="text-gray-600">{feature.description}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* How It Works Section */}
-      <section className="py-16 bg-white">
-        <div className="container-custom">
-          <div className="text-center mb-12">
+      <div className="bg-white py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
               How It Works
             </h2>
             <p className="text-xl text-gray-600">
-              Simple 4-step process to get your meal
+              Simple steps to get your meal ordered and ready
             </p>
           </div>
 
-          <div className="grid md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {[
-              {
-                step: '1',
-                title: 'Login & Order',
-                description: 'Sign in with your college ID and select your meal preference before 10:00 AM',
-                icon: Users
-              },
-              {
-                step: '2',
-                title: 'Get Time Slot',
-                description: 'Receive your designated time slot and QR code for pickup',
-                icon: Clock
-              },
-              {
-                step: '3',
-                title: 'Make Payment',
-                description: 'Pay ₹40 online using UPI or other digital payment methods',
-                icon: CreditCard
-              },
-              {
-                step: '4',
-                title: 'Pickup Meal',
-                description: 'Show your QR code during your time slot and collect your meal',
-                icon: QrCode
-              }
-            ].map((step, index) => {
-              const Icon = step.icon;
+              { step: '1', title: 'Login', description: 'Sign in with your college credentials', icon: Users },
+              { step: '2', title: 'Choose', description: 'Select your preferred meal type', icon: Utensils },
+              { step: '3', title: 'Pay', description: 'Complete payment online securely', icon: CreditCard },
+              { step: '4', title: 'Pickup', description: 'Show QR code and collect your meal', icon: QrCode }
+            ].map((item, index) => {
+              const Icon = item.icon;
               return (
-                <div key={index} className="text-center relative">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-600 text-white text-xl font-bold mb-4">
-                    {step.step}
-                  </div>
-                  <Icon className="h-8 w-8 text-primary-600 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {step.title}
-                  </h3>
-                  <p className="text-gray-600 text-sm">
-                    {step.description}
-                  </p>
-                  {index < 3 && (
-                    <div className="hidden md:block absolute top-8 left-full w-full">
-                      <ArrowRight className="h-6 w-6 text-gray-300 mx-auto" />
+                <div key={index} className="text-center">
+                  <div className="relative mb-6">
+                    <div className="w-16 h-16 bg-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Icon className="w-8 h-8 text-white" />
                     </div>
-                  )}
+                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-primary-600">{item.step}</span>
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{item.title}</h3>
+                  <p className="text-gray-600">{item.description}</p>
                 </div>
               );
             })}
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Call to Action */}
+      {/* CTA Section */}
       {!isAuthenticated && (
-        <section className="py-16 bg-primary-600 text-white">
-          <div className="container-custom text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+        <div className="bg-primary-600 py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Ready to Get Started?
             </h2>
-            <p className="text-xl mb-8 text-primary-100">
+            <p className="text-xl text-primary-100 mb-8">
               Join hundreds of students already using Smart Canteen
             </p>
-            <Link to="/login" className="btn-success text-lg px-8 py-4">
-              <Bell className="h-5 w-5" />
-              Sign Up Now
+            <Link
+              to="/login"
+              className="inline-flex items-center space-x-2 bg-white text-primary-600 px-8 py-4 rounded-lg font-semibold hover:bg-gray-50 transform hover:scale-105 transition-all"
+            >
+              <span>Login to Order</span>
+              <ArrowRight className="w-5 h-5" />
             </Link>
           </div>
-        </section>
+        </div>
       )}
     </div>
   );

@@ -1,240 +1,266 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 
 const OrderContext = createContext();
 
-export function useOrder() {
+export const useOrders = () => {
   const context = useContext(OrderContext);
   if (!context) {
-    throw new Error('useOrder must be used within an OrderProvider');
+    throw new Error('useOrders must be used within an OrderProvider');
   }
   return context;
-}
+};
 
-export function OrderProvider({ children }) {
+export const OrderProvider = ({ children }) => {
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
-  const [currentOrder, setCurrentOrder] = useState(null);
-  const [waitlist, setWaitlist] = useState([]);
+  const [myOrder, setMyOrder] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Constants
-  const MAX_ORDERS = 200;
-  const CUTOFF_TIME = '10:00';
-
+  // Load orders from localStorage on mount
   useEffect(() => {
-    // Load orders from localStorage on mount
     const savedOrders = localStorage.getItem('canteen_orders');
-    const savedCurrentOrder = localStorage.getItem('canteen_current_order');
-    const savedWaitlist = localStorage.getItem('canteen_waitlist');
-
     if (savedOrders) {
       try {
-        setOrders(JSON.parse(savedOrders));
+        const parsedOrders = JSON.parse(savedOrders);
+        setOrders(parsedOrders);
+        
+        // Find current user's order
+        if (user) {
+          const userOrder = parsedOrders.find(order => order.userId === user.id);
+          setMyOrder(userOrder || null);
+        }
       } catch (error) {
-        console.error('Error parsing saved orders:', error);
+        console.error('Error loading orders:', error);
       }
     }
+  }, [user]);
 
-    if (savedCurrentOrder) {
-      try {
-        setCurrentOrder(JSON.parse(savedCurrentOrder));
-      } catch (error) {
-        console.error('Error parsing saved current order:', error);
-      }
-    }
-
-    if (savedWaitlist) {
-      try {
-        setWaitlist(JSON.parse(savedWaitlist));
-      } catch (error) {
-        console.error('Error parsing saved waitlist:', error);
-      }
-    }
-  }, []);
+  // Save orders to localStorage whenever orders change
+  useEffect(() => {
+    localStorage.setItem('canteen_orders', JSON.stringify(orders));
+  }, [orders]);
 
   const isOrderingOpen = () => {
     const now = new Date();
-    const cutoffTime = new Date();
-    const [hours, minutes] = CUTOFF_TIME.split(':');
-    cutoffTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    
-    return now < cutoffTime;
+    const hour = now.getHours();
+    // Ordering is open until 10 AM
+    return hour < 10;
   };
 
   const getAvailableSlots = () => {
+    // Slots from 12:00 PM to 2:00 PM in 15-minute intervals
     const slots = [];
-    const startTime = new Date();
-    startTime.setHours(12, 0, 0, 0); // Start at 12:00 PM
-
-    for (let i = 0; i < 8; i++) { // 8 slots of 15 minutes each (2 hours)
-      const slotStart = new Date(startTime);
-      slotStart.setMinutes(startTime.getMinutes() + (i * 15));
-      
-      const slotEnd = new Date(slotStart);
-      slotEnd.setMinutes(slotStart.getMinutes() + 15);
-
-      const slotOrders = orders.filter(order => order.slot === `${slotStart.getHours()}:${slotStart.getMinutes().toString().padStart(2, '0')}`);
-      
-      slots.push({
-        id: i,
-        time: `${slotStart.getHours()}:${slotStart.getMinutes().toString().padStart(2, '0')} - ${slotEnd.getHours()}:${slotEnd.getMinutes().toString().padStart(2, '0')}`,
-        slot: `${slotStart.getHours()}:${slotStart.getMinutes().toString().padStart(2, '0')}`,
-        available: slotOrders.length < 25, // Max 25 orders per slot
-        count: slotOrders.length
-      });
+    for (let hour = 12; hour < 14; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        const slotOrders = orders.filter(order => order.slot === timeString);
+        slots.push({
+          time: timeString,
+          available: slotOrders.length < 20, // Max 20 orders per slot
+          count: slotOrders.length
+        });
+      }
     }
-
     return slots;
   };
 
+  const generateOrderId = () => {
+    return `ORD${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  };
+
+  const generateQRCode = (order) => {
+    return JSON.stringify({
+      orderId: order.id,
+      userId: order.userId,
+      userName: order.userName,
+      mealType: order.mealType,
+      slot: order.slot,
+      amount: order.amount,
+      createdAt: order.createdAt
+    });
+  };
+
   const createOrder = async (orderData) => {
+    if (!user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    if (!isOrderingOpen()) {
+      return { success: false, error: 'Ordering is closed for today' };
+    }
+
+    if (orders.length >= 200) {
+      return { success: false, error: 'Daily order limit reached' };
+    }
+
+    // Check if user already has an order today
+    const existingOrder = orders.find(order => 
+      order.userId === user.id && 
+      order.createdAt.startsWith(new Date().toISOString().split('T')[0])
+    );
+
+    if (existingOrder) {
+      return { success: false, error: 'You already have an order for today' };
+    }
+
     setLoading(true);
+
     try {
-      // Check if ordering is still open
-      if (!isOrderingOpen()) {
-        throw new Error('Ordering is closed. Orders must be placed before 10:00 AM.');
-      }
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Check if max orders reached
-      if (orders.length >= MAX_ORDERS) {
-        // Add to waitlist
-        const waitlistEntry = {
-          id: Date.now(),
-          userId: orderData.userId,
-          userName: orderData.userName,
-          email: orderData.email,
-          mealType: orderData.mealType,
-          timestamp: new Date().toISOString(),
-          position: waitlist.length + 1
-        };
-
-        const newWaitlist = [...waitlist, waitlistEntry];
-        setWaitlist(newWaitlist);
-        localStorage.setItem('canteen_waitlist', JSON.stringify(newWaitlist));
-        
-        return { 
-          success: false, 
-          waitlisted: true, 
-          position: waitlistEntry.position,
-          message: `You've been added to the waitlist at position ${waitlistEntry.position}` 
-        };
-      }
-
-      // Assign slot based on current order count
+      // Assign next available slot
       const availableSlots = getAvailableSlots();
       const nextSlot = availableSlots.find(slot => slot.available);
 
       if (!nextSlot) {
-        throw new Error('No available slots for today.');
+        return { success: false, error: 'No available slots for today' };
       }
 
-      // Create order
       const newOrder = {
-        id: Date.now(),
-        userId: orderData.userId,
-        userName: orderData.userName,
-        email: orderData.email,
-        collegeId: orderData.collegeId,
+        id: generateOrderId(),
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        collegeId: user.collegeId,
         mealType: orderData.mealType,
-        slot: nextSlot.slot,
-        slotDisplay: nextSlot.time,
-        price: 40,
-        paymentStatus: 'unpaid',
+        slot: nextSlot.time,
+        amount: 40, // Fixed price
+        paymentStatus: 'pending',
         orderStatus: 'confirmed',
-        timestamp: new Date().toISOString(),
-        qrCode: `ORDER-${Date.now()}-${orderData.userId}`,
-        served: false
+        servedAt: null,
+        createdAt: new Date().toISOString(),
+        qrCode: null
       };
 
-      const newOrders = [...orders, newOrder];
-      setOrders(newOrders);
-      setCurrentOrder(newOrder);
-      
-      localStorage.setItem('canteen_orders', JSON.stringify(newOrders));
-      localStorage.setItem('canteen_current_order', JSON.stringify(newOrder));
+      // Generate QR code data
+      newOrder.qrCode = generateQRCode(newOrder);
+
+      const updatedOrders = [...orders, newOrder];
+      setOrders(updatedOrders);
+      setMyOrder(newOrder);
 
       return { success: true, order: newOrder };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: 'Failed to create order' };
     } finally {
       setLoading(false);
     }
   };
 
   const updatePaymentStatus = (orderId, status) => {
-    const updatedOrders = orders.map(order => 
-      order.id === orderId ? { ...order, paymentStatus: status } : order
+    setOrders(prevOrders => 
+      prevOrders.map(order => 
+        order.id === orderId 
+          ? { ...order, paymentStatus: status }
+          : order
+      )
     );
-    setOrders(updatedOrders);
-    localStorage.setItem('canteen_orders', JSON.stringify(updatedOrders));
-
-    if (currentOrder && currentOrder.id === orderId) {
-      const updatedCurrentOrder = { ...currentOrder, paymentStatus: status };
-      setCurrentOrder(updatedCurrentOrder);
-      localStorage.setItem('canteen_current_order', JSON.stringify(updatedCurrentOrder));
+    
+    if (myOrder && myOrder.id === orderId) {
+      setMyOrder(prev => ({ ...prev, paymentStatus: status }));
     }
   };
 
-  const markOrderServed = (orderId) => {
-    const updatedOrders = orders.map(order => 
-      order.id === orderId ? { ...order, served: true, servedAt: new Date().toISOString() } : order
+  const markOrderAsServed = (orderId) => {
+    setOrders(prevOrders => 
+      prevOrders.map(order => 
+        order.id === orderId 
+          ? { 
+              ...order, 
+              orderStatus: 'served',
+              servedAt: new Date().toISOString()
+            }
+          : order
+      )
     );
-    setOrders(updatedOrders);
-    localStorage.setItem('canteen_orders', JSON.stringify(updatedOrders));
   };
 
-  const cancelOrder = (orderId) => {
-    const updatedOrders = orders.filter(order => order.id !== orderId);
-    setOrders(updatedOrders);
-    localStorage.setItem('canteen_orders', JSON.stringify(updatedOrders));
-
-    if (currentOrder && currentOrder.id === orderId) {
-      setCurrentOrder(null);
-      localStorage.removeItem('canteen_current_order');
-    }
-
-    // Move first waitlisted user to orders if there's space
-    if (waitlist.length > 0) {
-      // This would typically trigger a notification to the waitlisted user
-      console.log('Notifying waitlisted user:', waitlist[0]);
-    }
-  };
-
-  const getUserOrder = (userId) => {
-    return orders.find(order => order.userId === userId);
-  };
-
-  const getTodayStats = () => {
-    const today = new Date().toDateString();
+  const getOrderStats = () => {
+    const today = new Date().toISOString().split('T')[0];
     const todayOrders = orders.filter(order => 
-      new Date(order.timestamp).toDateString() === today
+      order.createdAt.startsWith(today)
     );
+
+    const vegOrders = todayOrders.filter(order => order.mealType === 'veg').length;
+    const nonVegOrders = todayOrders.filter(order => order.mealType === 'nonveg').length;
+    const paidOrders = todayOrders.filter(order => order.paymentStatus === 'paid').length;
+    const pendingPayments = todayOrders.filter(order => order.paymentStatus === 'pending').length;
+    const servedOrders = todayOrders.filter(order => order.orderStatus === 'served').length;
 
     return {
-      totalOrders: todayOrders.length,
-      paidOrders: todayOrders.filter(order => order.paymentStatus === 'paid').length,
-      unpaidOrders: todayOrders.filter(order => order.paymentStatus === 'unpaid').length,
-      servedOrders: todayOrders.filter(order => order.served).length,
-      revenue: todayOrders.filter(order => order.paymentStatus === 'paid').length * 40,
-      waitlistCount: waitlist.length,
-      spotsLeft: Math.max(0, MAX_ORDERS - todayOrders.length)
+      total: todayOrders.length,
+      veg: vegOrders,
+      nonVeg: nonVegOrders,
+      paid: paidOrders,
+      pendingPayments,
+      served: servedOrders,
+      revenue: paidOrders * 40,
+      pendingRevenue: pendingPayments * 40
     };
+  };
+
+  const getWeeklyStats = () => {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const weeklyOrders = orders.filter(order => 
+      new Date(order.createdAt) >= weekAgo
+    );
+
+    const dailyStats = {};
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayOrders = weeklyOrders.filter(order => 
+        order.createdAt.startsWith(dateStr)
+      );
+      
+      dailyStats[dateStr] = {
+        total: dayOrders.length,
+        veg: dayOrders.filter(order => order.mealType === 'veg').length,
+        nonVeg: dayOrders.filter(order => order.mealType === 'nonveg').length,
+        revenue: dayOrders.filter(order => order.paymentStatus === 'paid').length * 40
+      };
+    }
+
+    return dailyStats;
+  };
+
+  const getHourlyStats = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const todayOrders = orders.filter(order => 
+      order.createdAt.startsWith(today)
+    );
+
+    const hourlyStats = {};
+    for (let hour = 0; hour < 24; hour++) {
+      const hourOrders = todayOrders.filter(order => {
+        const orderHour = new Date(order.createdAt).getHours();
+        return orderHour === hour;
+      });
+      
+      hourlyStats[hour] = hourOrders.length;
+    }
+
+    return hourlyStats;
   };
 
   const value = {
     orders,
-    currentOrder,
-    waitlist,
+    myOrder,
     loading,
-    MAX_ORDERS,
-    CUTOFF_TIME,
-    isOrderingOpen,
-    getAvailableSlots,
     createOrder,
     updatePaymentStatus,
-    markOrderServed,
-    cancelOrder,
-    getUserOrder,
-    getTodayStats
+    markOrderAsServed,
+    isOrderingOpen,
+    getAvailableSlots,
+    getOrderStats,
+    getWeeklyStats,
+    getHourlyStats,
+    availableSlots: getAvailableSlots(),
+    orderStats: getOrderStats()
   };
 
   return (
@@ -242,4 +268,4 @@ export function OrderProvider({ children }) {
       {children}
     </OrderContext.Provider>
   );
-}
+};

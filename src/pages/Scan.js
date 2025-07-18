@@ -1,370 +1,418 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useOrder } from '../contexts/OrderContext';
+import React, { useState, useEffect } from 'react';
+import { useOrders } from '../contexts/OrderContext';
 import { 
-  Camera, 
   QrCode, 
+  Camera, 
   CheckCircle, 
   AlertCircle, 
-  Clock,
   User,
-  UtensilsCrossed,
+  Clock,
+  Utensils,
+  Search,
   X,
-  Scan as ScanIcon
+  Check,
+  Ban,
+  CreditCard,
+  MapPin
 } from 'lucide-react';
 
 const Scan = () => {
-  const [scannedData, setScannedData] = useState('');
+  const { orders, markOrderAsServed } = useOrders();
+  const [scanInput, setScanInput] = useState('');
+  const [scannedOrder, setScannedOrder] = useState(null);
   const [scanResult, setScanResult] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [error, setError] = useState('');
-  const inputRef = useRef(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const { orders, markOrderServed } = useOrder();
+  // Today's orders for manual search
+  const todayOrders = orders.filter(order => 
+    order.createdAt.startsWith(new Date().toISOString().split('T')[0])
+  );
 
-  const handleManualInput = (e) => {
-    setScannedData(e.target.value);
-    setError('');
-    setScanResult(null);
-  };
-
-  const processQRCode = (qrData) => {
-    // Find order by QR code
-    const order = orders.find(o => o.qrCode === qrData);
-    
-    if (!order) {
-      setScanResult({
-        type: 'error',
-        message: 'Invalid QR code. Order not found.',
-        order: null
-      });
-      return;
-    }
-
-    if (order.served) {
-      setScanResult({
-        type: 'warning',
-        message: 'This order has already been served.',
-        order: order
-      });
-      return;
-    }
-
-    if (order.paymentStatus !== 'paid') {
-      setScanResult({
-        type: 'error',
-        message: 'Payment not completed. Please ask student to complete payment first.',
-        order: order
-      });
-      return;
-    }
-
-    // Check if current time is within the slot
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentTime = `${currentHour}:${currentMinute.toString().padStart(2, '0')}`;
-    
-    const [slotHour, slotMinute] = order.slot.split(':').map(Number);
-    const slotStartTime = slotHour * 60 + slotMinute;
-    const slotEndTime = slotStartTime + 15; // 15 minute slots
-    const currentTimeMinutes = currentHour * 60 + currentMinute;
-
-    if (currentTimeMinutes < slotStartTime || currentTimeMinutes > slotEndTime) {
-      setScanResult({
-        type: 'warning',
-        message: `This order is for ${order.slotDisplay}. Current time slot doesn't match.`,
-        order: order
-      });
-      return;
-    }
-
-    setScanResult({
-      type: 'success',
-      message: 'Valid QR code! Ready to serve meal.',
-      order: order
-    });
-  };
+  const filteredOrders = todayOrders.filter(order => 
+    order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    order.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    order.collegeId.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleScan = () => {
-    setError('');
-    setScanResult(null);
-
-    if (!scannedData.trim()) {
-      setError('Please enter a QR code');
+    if (!scanInput.trim()) {
+      setScanResult({ type: 'error', message: 'Please enter QR code data' });
       return;
     }
 
-    processQRCode(scannedData.trim());
+    try {
+      // Try to parse QR code data
+      const qrData = JSON.parse(scanInput);
+      const order = orders.find(o => o.id === qrData.orderId);
+
+      if (!order) {
+        setScanResult({ type: 'error', message: 'Order not found' });
+        setScannedOrder(null);
+        return;
+      }
+
+      // Check if order is for today
+      const today = new Date().toISOString().split('T')[0];
+      if (!order.createdAt.startsWith(today)) {
+        setScanResult({ type: 'error', message: 'This order is not for today' });
+        setScannedOrder(null);
+        return;
+      }
+
+      // Check if already served
+      if (order.orderStatus === 'served') {
+        setScanResult({ type: 'warning', message: 'This order has already been served' });
+        setScannedOrder(order);
+        return;
+      }
+
+      // Check time slot
+      const currentTime = new Date();
+      const [slotHour, slotMinute] = order.slot.split(':').map(Number);
+      const slotTime = new Date();
+      slotTime.setHours(slotHour, slotMinute, 0, 0);
+      
+      const timeDiff = currentTime - slotTime;
+      const isInTimeWindow = timeDiff >= -15 * 60 * 1000 && timeDiff <= 15 * 60 * 1000; // 15 min window
+
+      if (!isInTimeWindow && currentTime < slotTime) {
+        setScanResult({ type: 'warning', message: 'Order time slot has not started yet' });
+        setScannedOrder(order);
+        return;
+      }
+
+      setScanResult({ type: 'success', message: 'Valid order - Ready to serve' });
+      setScannedOrder(order);
+
+    } catch (error) {
+      // Try to find by order ID directly
+      const order = orders.find(o => o.id === scanInput.trim());
+      if (order) {
+        setScanResult({ type: 'success', message: 'Order found by ID' });
+        setScannedOrder(order);
+      } else {
+        setScanResult({ type: 'error', message: 'Invalid QR code format' });
+        setScannedOrder(null);
+      }
+    }
   };
 
   const handleServeOrder = () => {
-    if (scanResult && scanResult.order) {
-      markOrderServed(scanResult.order.id);
-      setScanResult({
-        ...scanResult,
-        type: 'success',
-        message: 'Order marked as served successfully!',
-        order: { ...scanResult.order, served: true }
-      });
-      setScannedData('');
+    if (scannedOrder && scannedOrder.orderStatus !== 'served') {
+      markOrderAsServed(scannedOrder.id);
+      setScanResult({ type: 'success', message: 'Order marked as served successfully!' });
+      setScannedOrder(prev => ({ ...prev, orderStatus: 'served', servedAt: new Date().toISOString() }));
     }
   };
 
-  const startCameraScanning = () => {
-    setIsScanning(true);
-    // In a real implementation, you would integrate with a camera library
-    // For demo purposes, we'll simulate camera scanning
-    setTimeout(() => {
-      // Simulate scanning a QR code
-      const sampleOrder = orders.find(o => !o.served && o.paymentStatus === 'paid');
-      if (sampleOrder) {
-        setScannedData(sampleOrder.qrCode);
-        processQRCode(sampleOrder.qrCode);
-      }
-      setIsScanning(false);
-    }, 2000);
+  const handleManualSelect = (order) => {
+    setScannedOrder(order);
+    if (order.orderStatus === 'served') {
+      setScanResult({ type: 'warning', message: 'This order has already been served' });
+    } else {
+      setScanResult({ type: 'success', message: 'Order selected - Ready to serve' });
+    }
   };
 
-  const getTodayOrders = () => {
-    const today = new Date().toDateString();
-    return orders.filter(order => 
-      new Date(order.timestamp).toDateString() === today
-    );
+  const clearScan = () => {
+    setScanInput('');
+    setScannedOrder(null);
+    setScanResult(null);
   };
 
-  const todayOrders = getTodayOrders();
-  const servedOrders = todayOrders.filter(o => o.served);
-  const pendingOrders = todayOrders.filter(o => !o.served && o.paymentStatus === 'paid');
+  const getOrderStatusColor = (status) => {
+    switch (status) {
+      case 'served':
+        return 'text-green-700 bg-green-100';
+      case 'confirmed':
+        return 'text-blue-700 bg-blue-100';
+      default:
+        return 'text-gray-700 bg-gray-100';
+    }
+  };
+
+  const getPaymentStatusColor = (status) => {
+    switch (status) {
+      case 'paid':
+        return 'text-green-700 bg-green-100';
+      case 'pending':
+        return 'text-yellow-700 bg-yellow-100';
+      default:
+        return 'text-gray-700 bg-gray-100';
+    }
+  };
+
+  // Stats for today
+  const stats = {
+    total: todayOrders.length,
+    served: todayOrders.filter(o => o.orderStatus === 'served').length,
+    pending: todayOrders.filter(o => o.orderStatus === 'confirmed').length,
+    paid: todayOrders.filter(o => o.paymentStatus === 'paid').length
+  };
 
   return (
-    <div className="container-custom py-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">QR Code Scanner</h1>
-          <p className="text-gray-600">
-            Scan student QR codes to verify and serve meals
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            Order Scanner
+          </h1>
+          <p className="text-lg text-gray-600">
+            Scan QR codes to verify and serve orders
           </p>
         </div>
 
         {/* Stats */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="card text-center">
-            <UtensilsCrossed className="h-8 w-8 text-secondary-600 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900">{servedOrders.length}</div>
-            <div className="text-sm text-gray-600">Served Today</div>
-          </div>
-          <div className="card text-center">
-            <Clock className="h-8 w-8 text-warning-600 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900">{pendingOrders.length}</div>
-            <div className="text-sm text-gray-600">Pending Pickup</div>
-          </div>
-          <div className="card text-center">
-            <QrCode className="h-8 w-8 text-primary-600 mx-auto mb-2" />
-            <div className="text-2xl font-bold text-gray-900">{todayOrders.length}</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white rounded-xl shadow-lg p-4 text-center">
+            <Utensils className="w-6 h-6 text-blue-600 mx-auto mb-2" />
+            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
             <div className="text-sm text-gray-600">Total Orders</div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-lg p-4 text-center">
+            <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-2" />
+            <div className="text-2xl font-bold text-gray-900">{stats.served}</div>
+            <div className="text-sm text-gray-600">Served</div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-lg p-4 text-center">
+            <Clock className="w-6 h-6 text-orange-600 mx-auto mb-2" />
+            <div className="text-2xl font-bold text-gray-900">{stats.pending}</div>
+            <div className="text-sm text-gray-600">Pending</div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-lg p-4 text-center">
+            <CreditCard className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+            <div className="text-2xl font-bold text-gray-900">{stats.paid}</div>
+            <div className="text-sm text-gray-600">Paid</div>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Scanner */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Scan QR Code</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Scanner Section */}
+          <div className="bg-white rounded-xl shadow-lg p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <QrCode className="w-6 h-6 mr-2" />
+              QR Code Scanner
+            </h2>
 
-            {/* Camera Scanner Button */}
+            {/* Camera Button */}
             <div className="mb-6">
               <button
-                onClick={startCameraScanning}
-                disabled={isScanning}
-                className="w-full btn-primary"
+                onClick={() => setShowCamera(!showCamera)}
+                className="w-full flex items-center justify-center space-x-2 bg-primary-600 text-white py-3 px-4 rounded-lg hover:bg-primary-700 transition-colors"
               >
-                {isScanning ? (
-                  <>
-                    <div className="spinner" />
-                    Scanning...
-                  </>
-                ) : (
-                  <>
-                    <Camera className="h-5 w-5" />
-                    Start Camera Scanner
-                  </>
-                )}
+                <Camera className="w-5 h-5" />
+                <span>{showCamera ? 'Hide Camera' : 'Open Camera'}</span>
               </button>
+              
+              {showCamera && (
+                <div className="mt-4 p-4 bg-gray-100 rounded-lg text-center">
+                  <Camera className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-600 text-sm">
+                    Camera functionality would be implemented here using libraries like react-qr-scanner
+                  </p>
+                </div>
+              )}
             </div>
-
-            <div className="text-center text-gray-500 mb-6">OR</div>
 
             {/* Manual Input */}
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Enter QR Code Manually
+                  Manual QR Code Input
                 </label>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={scannedData}
-                  onChange={handleManualInput}
-                  placeholder="Paste or type QR code here..."
-                  className="input-field"
+                <textarea
+                  value={scanInput}
+                  onChange={(e) => setScanInput(e.target.value)}
+                  placeholder="Paste QR code data or enter Order ID..."
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
 
-              <button
-                onClick={handleScan}
-                disabled={!scannedData.trim()}
-                className="w-full btn-secondary"
-              >
-                <ScanIcon className="h-5 w-5" />
-                Verify QR Code
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleScan}
+                  className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Scan/Verify</span>
+                </button>
+                
+                <button
+                  onClick={clearScan}
+                  className="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            {error && (
-              <div className="mt-4 p-4 bg-danger-50 border border-danger-200 rounded-lg">
-                <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 text-danger-600 mr-2" />
-                  <span className="text-danger-800">{error}</span>
+            {/* Scan Result */}
+            {scanResult && (
+              <div className={`mt-6 p-4 rounded-lg ${
+                scanResult.type === 'success' ? 'bg-green-50 border border-green-200' :
+                scanResult.type === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
+                'bg-red-50 border border-red-200'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  {scanResult.type === 'success' && <CheckCircle className="w-5 h-5 text-green-600" />}
+                  {scanResult.type === 'warning' && <AlertCircle className="w-5 h-5 text-yellow-600" />}
+                  {scanResult.type === 'error' && <Ban className="w-5 h-5 text-red-600" />}
+                  <span className={`font-medium ${
+                    scanResult.type === 'success' ? 'text-green-800' :
+                    scanResult.type === 'warning' ? 'text-yellow-800' :
+                    'text-red-800'
+                  }`}>
+                    {scanResult.message}
+                  </span>
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Scan Result */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Scan Result</h2>
-
-            {scanResult ? (
-              <div className="space-y-4">
-                {/* Status Message */}
-                <div className={`p-4 rounded-lg border ${
-                  scanResult.type === 'success' 
-                    ? 'bg-secondary-50 border-secondary-200' 
-                    : scanResult.type === 'warning'
-                    ? 'bg-warning-50 border-warning-200'
-                    : 'bg-danger-50 border-danger-200'
-                }`}>
-                  <div className="flex items-center">
-                    {scanResult.type === 'success' ? (
-                      <CheckCircle className="h-5 w-5 text-secondary-600 mr-2" />
-                    ) : (
-                      <AlertCircle className={`h-5 w-5 mr-2 ${
-                        scanResult.type === 'warning' ? 'text-warning-600' : 'text-danger-600'
-                      }`} />
-                    )}
-                    <span className={`font-medium ${
-                      scanResult.type === 'success' 
-                        ? 'text-secondary-800' 
-                        : scanResult.type === 'warning'
-                        ? 'text-warning-800'
-                        : 'text-danger-800'
-                    }`}>
-                      {scanResult.message}
+            {/* Order Details */}
+            {scannedOrder && (
+              <div className="mt-6 bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h3>
+                
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Order ID:</span>
+                    <span className="font-mono text-sm">{scannedOrder.id}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Student:</span>
+                    <span className="font-medium">{scannedOrder.userName}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">College ID:</span>
+                    <span className="font-medium">{scannedOrder.collegeId}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Meal Type:</span>
+                    <span className="font-medium capitalize">{scannedOrder.mealType}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Time Slot:</span>
+                    <span className="font-medium">{scannedOrder.slot}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Amount:</span>
+                    <span className="font-medium">₹{scannedOrder.amount}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Payment:</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(scannedOrder.paymentStatus)}`}>
+                      {scannedOrder.paymentStatus}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Status:</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getOrderStatusColor(scannedOrder.orderStatus)}`}>
+                      {scannedOrder.orderStatus}
                     </span>
                   </div>
                 </div>
 
-                {/* Order Details */}
-                {scanResult.order && (
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-medium text-gray-900 mb-3">Order Details</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Student:</span>
-                        <span className="font-medium">{scanResult.order.userName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">College ID:</span>
-                        <span className="font-medium">{scanResult.order.collegeId}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Meal Type:</span>
-                        <span className="font-medium capitalize">{scanResult.order.mealType}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Time Slot:</span>
-                        <span className="font-medium">{scanResult.order.slotDisplay}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Payment:</span>
-                        <span className={`badge ${
-                          scanResult.order.paymentStatus === 'paid' ? 'badge-success' : 'badge-warning'
-                        }`}>
-                          {scanResult.order.paymentStatus}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Status:</span>
-                        <span className={`badge ${
-                          scanResult.order.served ? 'badge-success' : 'badge-warning'
-                        }`}>
-                          {scanResult.order.served ? 'Served' : 'Pending'}
-                        </span>
-                      </div>
-                    </div>
+                {/* Serve Button */}
+                {scannedOrder.orderStatus !== 'served' && (
+                  <button
+                    onClick={handleServeOrder}
+                    className="w-full mt-6 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Check className="w-5 h-5" />
+                    <span>Mark as Served</span>
+                  </button>
+                )}
 
-                    {/* Serve Button */}
-                    {scanResult.type === 'success' && !scanResult.order.served && (
-                      <button
-                        onClick={handleServeOrder}
-                        className="w-full mt-4 btn-success"
-                      >
-                        <CheckCircle className="h-5 w-5" />
-                        Mark as Served
-                      </button>
+                {scannedOrder.orderStatus === 'served' && (
+                  <div className="mt-6 p-3 bg-green-100 rounded-lg text-center">
+                    <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-1" />
+                    <span className="text-green-800 font-medium">Order Already Served</span>
+                    {scannedOrder.servedAt && (
+                      <div className="text-sm text-green-700 mt-1">
+                        Served at: {new Date(scannedOrder.servedAt).toLocaleTimeString()}
+                      </div>
                     )}
                   </div>
                 )}
-
-                {/* Clear Button */}
-                <button
-                  onClick={() => {
-                    setScanResult(null);
-                    setScannedData('');
-                    setError('');
-                  }}
-                  className="w-full btn-secondary"
-                >
-                  <X className="h-5 w-5" />
-                  Clear Result
-                </button>
-              </div>
-            ) : (
-              <div className="text-center text-gray-500 py-8">
-                <QrCode className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p>Scan or enter a QR code to see results here</p>
               </div>
             )}
           </div>
-        </div>
 
-        {/* Quick Actions */}
-        <div className="mt-8 card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Test</h2>
-          <p className="text-gray-600 mb-4">
-            Use these sample QR codes to test the scanner:
-          </p>
-          <div className="grid md:grid-cols-2 gap-4">
-            {pendingOrders.slice(0, 4).map((order) => (
-              <button
-                key={order.id}
-                onClick={() => {
-                  setScannedData(order.qrCode);
-                  processQRCode(order.qrCode);
-                }}
-                className="text-left p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-900">{order.userName}</div>
-                    <div className="text-sm text-gray-600">{order.slotDisplay}</div>
-                  </div>
-                  <div className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">
-                    Test QR
-                  </div>
+          {/* Orders List */}
+          <div className="bg-white rounded-xl shadow-lg p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Today's Orders</h2>
+
+            {/* Search */}
+            <div className="mb-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by Order ID, Name, or College ID..."
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+            </div>
+
+            {/* Orders */}
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {filteredOrders.length === 0 ? (
+                <div className="text-center py-8">
+                  <Utensils className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-600">No orders found</p>
                 </div>
-              </button>
-            ))}
+              ) : (
+                filteredOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    onClick={() => handleManualSelect(order)}
+                    className={`p-4 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
+                      scannedOrder?.id === order.id ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="font-medium text-gray-900">{order.userName}</div>
+                        <div className="text-sm text-gray-600">{order.collegeId}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-mono text-gray-500">{order.id}</div>
+                        <div className="text-sm text-gray-600">{order.slot}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <div className="flex space-x-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getOrderStatusColor(order.orderStatus)}`}>
+                          {order.orderStatus}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(order.paymentStatus)}`}>
+                          {order.paymentStatus}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600 capitalize">
+                        {order.mealType}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>

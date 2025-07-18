@@ -2,87 +2,80 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext();
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};
 
-export function AuthProvider({ children }) {
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Demo users for development
+  const demoUsers = {
+    'student@college.edu': {
+      id: 'student1',
+      email: 'student@college.edu',
+      name: 'John Student',
+      role: 'student',
+      collegeId: 'CS2021001'
+    },
+    'admin@college.edu': {
+      id: 'admin1',
+      email: 'admin@college.edu',
+      name: 'Admin User',
+      role: 'admin',
+      collegeId: 'ADMIN001'
+    }
+  };
+
   useEffect(() => {
-    // Check for existing session on app load
-    const savedUser = localStorage.getItem('canteen_user');
+    // Check if user is logged in (from localStorage)
+    const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
         setUser(JSON.parse(savedUser));
       } catch (error) {
-        console.error('Error parsing saved user:', error);
-        localStorage.removeItem('canteen_user');
+        localStorage.removeItem('user');
       }
     }
     setLoading(false);
   }, []);
 
   const login = async (email, password) => {
-    setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock user data - replace with actual API call
-      const userData = {
-        id: Date.now(),
-        email,
-        name: email.split('@')[0],
-        role: email.includes('admin') ? 'admin' : 'student',
-        collegeId: email.includes('admin') ? null : `ST${Math.floor(Math.random() * 10000)}`,
-        createdAt: new Date().toISOString()
-      };
-
-      setUser(userData);
-      localStorage.setItem('canteen_user', JSON.stringify(userData));
-      return { success: true };
+      // Demo login logic - replace with actual API call
+      if (demoUsers[email] && password === 'password123') {
+        const userData = demoUsers[email];
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+        return { success: true };
+      } else {
+        return { success: false, error: 'Invalid credentials' };
+      }
     } catch (error) {
-      return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
+      return { success: false, error: 'Login failed' };
     }
   };
 
   const loginWithGoogle = async () => {
-    setLoading(true);
     try {
-      // Simulate Google OAuth
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const userData = {
-        id: Date.now(),
-        email: 'student@college.edu',
-        name: 'John Doe',
-        role: 'student',
-        collegeId: `ST${Math.floor(Math.random() * 10000)}`,
-        avatar: 'https://ui-avatars.com/api/?name=John+Doe&background=3b82f6&color=fff',
-        createdAt: new Date().toISOString()
-      };
-
+      // Demo Google login - replace with actual Google OAuth
+      const userData = demoUsers['student@college.edu'];
       setUser(userData);
-      localStorage.setItem('canteen_user', JSON.stringify(userData));
+      localStorage.setItem('user', JSON.stringify(userData));
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
+      return { success: false, error: 'Google login failed' };
     }
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('canteen_user');
+    localStorage.removeItem('user');
   };
 
   const value = {
@@ -92,12 +85,13 @@ export function AuthProvider({ children }) {
     logout,
     loading,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin'
+    isAdmin: user?.role === 'admin',
+    isStudent: user?.role === 'student'
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
-}
+};
